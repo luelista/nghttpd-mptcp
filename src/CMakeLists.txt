@@ -57,6 +57,7 @@ if(ENABLE_APP)
     ${HELPER_OBJECTS}
     nghttpd.cc
     ssl.cc
+      mptcp_rbs.c
     HttpServer.cc
   )
 

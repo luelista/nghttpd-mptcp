@@ -64,10 +64,10 @@ if ENABLE_APP
 bin_PROGRAMS += nghttp nghttpd nghttpx
 
 HELPER_OBJECTS = util.cc \
-	http2.cc timegm.c app_helper.cc nghttp2_gzip.c
+	http2.cc timegm.c app_helper.cc nghttp2_gzip.c mptcp_rbs.c
 HELPER_HFILES = util.h \
 	http2.h timegm.h app_helper.h nghttp2_config.h \
-	nghttp2_gzip.h network.h
+	nghttp2_gzip.h network.h mptcp_rbs.h
 
 HTML_PARSER_OBJECTS =
 HTML_PARSER_HFILES = HtmlParser.h
