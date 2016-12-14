@@ -135,72 +135,48 @@ void stream_timeout_cb(struct ev_loop *loop, ev_timer *w, int revents) {
     delete_handler(hd);
   }
 }
-} // namespace
 
-namespace {
 void add_stream_read_timeout(Stream *stream) {
   auto hd = stream->handler;
   ev_timer_again(hd->get_loop(), &stream->rtimer);
 }
-} // namespace
 
-namespace {
 void add_stream_read_timeout_if_pending(Stream *stream) {
   auto hd = stream->handler;
   if (ev_is_active(&stream->rtimer)) {
     ev_timer_again(hd->get_loop(), &stream->rtimer);
   }
 }
-} // namespace
 
-namespace {
 void add_stream_write_timeout(Stream *stream) {
   auto hd = stream->handler;
   ev_timer_again(hd->get_loop(), &stream->wtimer);
 }
-} // namespace
 
-namespace {
 void remove_stream_read_timeout(Stream *stream) {
   auto hd = stream->handler;
   ev_timer_stop(hd->get_loop(), &stream->rtimer);
 }
-} // namespace
 
-namespace {
 void remove_stream_write_timeout(Stream *stream) {
   auto hd = stream->handler;
   ev_timer_stop(hd->get_loop(), &stream->wtimer);
 }
-} // namespace
 
-namespace {
 void fill_callback(nghttp2_session_callbacks *callbacks, const Config *config);
-} // namespace
 
-namespace {
 constexpr ev_tstamp RELEASE_FD_TIMEOUT = 2.;
-} // namespace
 
-namespace {
 void release_fd_cb(struct ev_loop *loop, ev_timer *w, int revents);
-} // namespace
 
-namespace {
 constexpr ev_tstamp FILE_ENTRY_MAX_AGE = 10.;
-} // namespace
 
-namespace {
 constexpr size_t FILE_ENTRY_EVICT_THRES = 2048;
-} // namespace
 
-namespace {
 bool need_validation_file_entry(const FileEntry *ent, ev_tstamp now) {
   return ent->last_valid + FILE_ENTRY_MAX_AGE < now;
 }
-} // namespace
 
-namespace {
 bool validate_file_entry(FileEntry *ent, ev_tstamp now) {
   struct stat stbuf;
   int rv;
@@ -1142,9 +1118,8 @@ void prepare_status_response(Stream *stream, Http2Handler *hd, int status) {
   hd->submit_response(StringRef{status_page->status}, stream->stream_id,
                       headers, &data_prd);
 }
-} // namespace
 
-namespace {
+
 void prepare_echo_response(Stream *stream, Http2Handler *hd) {
   auto length = lseek(stream->file_ent->fd, 0, SEEK_END);
   if (length == -1) {
@@ -1171,9 +1146,8 @@ void prepare_echo_response(Stream *stream, Http2Handler *hd) {
   hd->submit_response(StringRef::from_lit("200"), stream->stream_id, headers,
                       &data_prd);
 }
-} // namespace
 
-namespace {
+
 bool prepare_upload_temp_store(Stream *stream, Http2Handler *hd) {
   auto sessions = hd->get_sessions();
 
@@ -1191,9 +1165,8 @@ bool prepare_upload_temp_store(Stream *stream, Http2Handler *hd) {
   stream->echo_upload = true;
   return true;
 }
-} // namespace
 
-namespace {
+
 void prepare_redirect_response(Stream *stream, Http2Handler *hd,
                                const StringRef &path, int status) {
   auto scheme = stream->header.scheme;
@@ -1214,9 +1187,9 @@ void prepare_redirect_response(Stream *stream, Http2Handler *hd,
   hd->submit_response(StringRef{status_page->status}, stream->stream_id,
                       headers, nullptr);
 }
-} // namespace
 
-namespace {
+
+
 void prepare_response(Stream *stream, Http2Handler *hd,
                       bool allow_push = true) {
   int rv;
@@ -1387,9 +1360,9 @@ void prepare_response(Stream *stream, Http2Handler *hd,
   hd->submit_file_response(StringRef::from_lit("200"), stream, file_ent->mtime,
                            file_ent->length, file_ent->content_type, &data_prd);
 }
-} // namespace
 
-namespace {
+
+
 int on_header_callback2(nghttp2_session *session, const nghttp2_frame *frame,
                         nghttp2_rcbuf *name, nghttp2_rcbuf *value,
                         uint8_t flags, void *user_data) {
@@ -1463,9 +1436,9 @@ int on_header_callback2(nghttp2_session *session, const nghttp2_frame *frame,
 
   return 0;
 }
-} // namespace
 
-namespace {
+
+
 int on_begin_headers_callback(nghttp2_session *session,
                               const nghttp2_frame *frame, void *user_data) {
   auto hd = static_cast<Http2Handler *>(user_data);
@@ -1560,9 +1533,9 @@ int hd_on_frame_recv_callback(nghttp2_session *session,
   }
   return 0;
 }
-} // namespace
 
-namespace {
+
+
 int hd_on_frame_send_callback(nghttp2_session *session,
                               const nghttp2_frame *frame, void *user_data) {
   auto hd = static_cast<Http2Handler *>(user_data);
@@ -1622,9 +1595,9 @@ int hd_on_frame_send_callback(nghttp2_session *session,
   }
   return 0;
 }
-} // namespace
 
-namespace {
+
+
 int send_data_callback(nghttp2_session *session, nghttp2_frame *frame,
                        const uint8_t *framehd, size_t length,
                        nghttp2_data_source *source, void *user_data) {
@@ -1674,18 +1647,18 @@ int send_data_callback(nghttp2_session *session, nghttp2_frame *frame,
 
   return 0;
 }
-} // namespace
 
-namespace {
+
+
 ssize_t select_padding_callback(nghttp2_session *session,
                                 const nghttp2_frame *frame, size_t max_payload,
                                 void *user_data) {
   auto hd = static_cast<Http2Handler *>(user_data);
   return std::min(max_payload, frame->hd.length + hd->get_config()->padding);
 }
-} // namespace
 
-namespace {
+
+
 int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags,
                                 int32_t stream_id, const uint8_t *data,
                                 size_t len, void *user_data) {
@@ -1717,9 +1690,9 @@ int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags,
 
   return 0;
 }
-} // namespace
 
-namespace {
+
+
 int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
                              uint32_t error_code, void *user_data) {
   auto hd = static_cast<Http2Handler *>(user_data);
@@ -1732,9 +1705,9 @@ int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
   }
   return 0;
 }
-} // namespace
 
-namespace {
+
+
 void fill_callback(nghttp2_session_callbacks *callbacks, const Config *config) {
   nghttp2_session_callbacks_set_on_stream_close_callback(
       callbacks, on_stream_close_callback);
@@ -1799,17 +1772,15 @@ void worker_acceptcb(struct ev_loop *loop, ev_async *w, int revents) {
     sessions->accept_connection(c.fd);
   }
 }
-} // namespace
 
-namespace {
+
 void run_worker(Worker *worker) {
   auto loop = worker->sessions->get_loop();
 
   ev_run(loop, 0);
 }
-} // namespace
 
-namespace {
+
 int get_ev_loop_flags() {
   if (ev_supported_backends() & ~ev_recommended_backends() & EVBACKEND_KQUEUE) {
     return ev_recommended_backends() | EVBACKEND_KQUEUE;
@@ -1915,9 +1886,8 @@ void acceptcb(struct ev_loop *loop, ev_io *w, int revents) {
   auto handler = static_cast<ListenEventHandler *>(w->data);
   handler->accept_connection();
 }
-} // namespace
 
-namespace {
+
 FileEntry make_status_body(int status, uint16_t port) {
   BlockAllocator balloc(1024, 1024);
 
@@ -1985,17 +1955,17 @@ int next_proto_cb(SSL *s, const unsigned char **data, unsigned int *len,
   *len = next_proto->size();
   return SSL_TLSEXT_ERR_OK;
 }
-} // namespace
 
-namespace {
+
+
 int verify_callback(int preverify_ok, X509_STORE_CTX *ctx) {
   // We don't verify the client certificate. Just request it for the
   // testing purpose.
   return 1;
 }
-} // namespace
 
-namespace {
+
+
 int start_listen(HttpServer *sv, struct ev_loop *loop, Sessions *sessions,
                  const Config *config) {
   int r;
