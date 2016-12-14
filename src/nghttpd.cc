@@ -228,6 +228,8 @@ int main(int argc, char **argv) {
         {"mime-types-file", required_argument, &flag, 9},
         {"no-content-length", no_argument, &flag, 10},
         {"encoder-header-table-size", required_argument, &flag, 11},
+        {"mptcp-ruleset", required_argument, &flag, 12},
+        {"mptcp-skb-prop", required_argument, &flag, 13},
         {nullptr, 0, nullptr, 0}};
     int option_index = 0;
     int c = getopt_long(argc, argv, "DVb:c:d:ehm:n:p:va:w:W:", long_options,
@@ -407,6 +409,12 @@ int main(int argc, char **argv) {
         config.encoder_header_table_size = n;
         break;
       }
+      case 12:
+        config.mptcp_ruleset = optarg;
+        break;
+      case 13:
+        config.mptcp_skb_property_mode = atoi(optarg);
+        break;
       }
       break;
     default:

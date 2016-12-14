@@ -47,6 +47,8 @@
 #include "buffer.h"
 #include "template.h"
 #include "allocator.h"
+#include "mptcp_rbs.h"
+
 
 namespace nghttp2 {
 
@@ -82,6 +84,8 @@ struct Config {
   bool hexdump;
   bool echo_upload;
   bool no_content_length;
+  std::string mptcp_ruleset;
+  int mptcp_skb_property_mode;
   Config();
   ~Config();
 };
@@ -148,11 +152,13 @@ struct Stream {
   size_t header_buffer_size;
   int32_t stream_id;
   bool echo_upload;
+  uint32_t priority_file_type;   // --> for mptcp scheduler
   Stream(Http2Handler *handler, int32_t stream_id);
   ~Stream();
 };
 
 class Sessions;
+
 
 class Http2Handler {
 public:
@@ -206,6 +212,7 @@ public:
   using WriteBuf = Buffer<64_k>;
 
   WriteBuf *get_wb();
+  struct skb_prop_range *skbProp;
 
 private:
   ev_io wev_;
@@ -213,6 +220,7 @@ private:
   ev_timer settings_timerev_;
   std::map<int32_t, std::unique_ptr<Stream>> id2stream_;
   WriteBuf wb_;
+
   std::function<int(Http2Handler &)> read_, write_;
   int64_t session_id_;
   nghttp2_session *session_;

@@ -56,12 +56,16 @@
 #include <openssl/dh.h>
 
 #include <zlib.h>
+#include <nghttp2_npn.h>
+#include <nghttp2_session.h>
 
 #include "app_helper.h"
 #include "http2.h"
 #include "util.h"
 #include "ssl.h"
 #include "template.h"
+
+#include "mptcp_rbs.h"
 
 #ifndef O_BINARY
 #define O_BINARY (0)
@@ -108,7 +112,8 @@ Config::Config()
       early_response(false),
       hexdump(false),
       echo_upload(false),
-      no_content_length(false) {}
+      no_content_length(false),
+      mptcp_skb_property_mode(0) {}
 
 Config::~Config() {}
 
@@ -272,6 +277,20 @@ public:
   const nghttp2_option *get_option() const { return option_; }
   void accept_connection(int fd) {
     util::make_socket_nodelay(fd);
+
+
+    printf("MPTCP: Selecting ruleset \"%s\" ...\n", config_->mptcp_ruleset.c_str());
+    if (config_->mptcp_ruleset.size() > 0) {
+      // configure MPTCP rule-based scheduler ruleset
+      if (setsockopt(fd, IPPROTO_TCP, MPTCP_RULE_SET, config_->mptcp_ruleset.c_str(), config_->mptcp_ruleset.length()) <
+          0) {
+        perror("Error: Could not select ruleset for socket");
+        close(fd);
+        return;
+      }
+    }
+
+
     SSL *ssl = nullptr;
     if (ssl_ctx_) {
       ssl = ssl_session_new(fd);
@@ -560,6 +579,31 @@ void Http2Handler::start_settings_timer() {
   ev_timer_start(sessions_->get_loop(), &settings_timerev_);
 }
 
+unsigned int testCounter = 0;
+#define FROM_FILL_WB 1
+#define FROM_SEND_CALLBACK 2
+unsigned int get_skb_property(const Config *config, int caller, nghttp2_frame *frame, Stream *stream) {
+  testCounter += 1;
+
+  printf("get_skb_property: caller=%d, mode=%d, length=%d, stream_id=%d, type=%d, flags=%d, stream=%p, testCounter=%d\n",
+    caller, config->mptcp_skb_property_mode, frame->hd.length, frame->hd.stream_id, frame->hd.type, frame->hd.flags, stream, testCounter);
+  
+  if (stream) printf("get_skb_property: stream_id=%d, priority_file_type=%d\n", stream->stream_id, stream->priority_file_type);
+
+  switch(config->mptcp_skb_property_mode) {
+    case 1:
+      return testCounter;
+    case 2:
+      if (!frame) return 0;
+      return frame->hd.type;
+    case 3:
+      if (!frame) return 0;
+      return frame->hd.stream_id;
+    case 4:
+      if (!stream) return 0;
+      return stream->priority_file_type;
+  }
+}
 int Http2Handler::fill_wb() {
   if (data_pending_) {
     auto n = std::min(wb_.wleft(), data_pendinglen_);
@@ -586,7 +630,18 @@ int Http2Handler::fill_wb() {
     if (datalen == 0) {
       break;
     }
+
     auto n = wb_.write(data, datalen);
+
+    Stream* stream = NULL;
+    if (session_->aob.item->frame.hd.stream_id)
+      stream = get_stream(session_->aob.item->frame.hd.stream_id);
+    unsigned int mySkbProp = get_skb_property(get_config(), FROM_FILL_WB,
+                                              &session_->aob.item->frame,
+                                              stream);
+
+    printf("fill_wb: putting %d bytes with prop=%d in annotated write buffer\n", datalen, mySkbProp);
+    skb_prop_push(&skbProp, datalen, mySkbProp);
     if (n < static_cast<decltype(n)>(datalen)) {
       data_pending_ = data + n;
       data_pendinglen_ = datalen - n;
@@ -635,6 +690,7 @@ int Http2Handler::write_clear() {
   auto loop = sessions_->get_loop();
   for (;;) {
     if (wb_.rleft() > 0) {
+      rbs_set_skb_property(fd_, skb_prop_peek(&skbProp));
       ssize_t nwrite;
       while ((nwrite = write(fd_, wb_.pos, wb_.rleft())) == -1 &&
              errno == EINTR)
@@ -646,6 +702,7 @@ int Http2Handler::write_clear() {
         }
         return -1;
       }
+      skb_prop_pop(&skbProp, nwrite);
       wb_.drain(nwrite);
       continue;
     }
@@ -757,13 +814,19 @@ fin:
   return write_(*this);
 }
 
+
 int Http2Handler::write_tls() {
   auto loop = sessions_->get_loop();
-
+printf("write_tls: start\n");
   ERR_clear_error();
 
   for (;;) {
     if (wb_.rleft() > 0) {
+
+      rbs_set_skb_property(fd_, skb_prop_peek(&skbProp));
+
+      //rbs_set_reg(fd_, 1, (skbProp == NULL) ? 1 : 0);
+
       auto rv = SSL_write(ssl_, wb_.pos, wb_.rleft());
 
       if (rv <= 0) {
@@ -779,8 +842,14 @@ int Http2Handler::write_tls() {
           return -1;
         }
       }
-
+      printf("write_tls: draining %d of %d \n", rv, wb_.rleft());
+      skb_prop_pop(&skbProp, rv);
       wb_.drain(rv);
+      printf("skbProp: %p", skbProp);
+      if (skbProp) printf(", frameLength=%d, skbProperty=%d", skbProp->frameLength, skbProp->skbProperty);
+      printf("\n");
+      rbs_set_reg(fd_, 1, (skbProp == NULL && nghttp2_session_want_write(session_) == 0) ? 1 : 0);
+
       continue;
     }
     wb_.reset();
@@ -1325,6 +1394,7 @@ void prepare_response(Stream *stream, Http2Handler *hd,
       const auto &mime_types = hd->get_config()->mime_types;
       auto content_type_itr = mime_types.find(ext);
       if (content_type_itr != std::end(mime_types)) {
+        //stream->priority_file_type = std::distance(mime_types.begin(), content_type_itr);
         content_type = &(*content_type_itr).second;
       }
     }
@@ -1606,6 +1676,9 @@ int send_data_callback(nghttp2_session *session, nghttp2_frame *frame,
   auto padlen = frame->data.padlen;
   auto stream = hd->get_stream(frame->hd.stream_id);
 
+  unsigned int mySkbProp = get_skb_property(hd->get_config(), FROM_SEND_CALLBACK,
+                                            frame, stream); ;  // TODO get SKB property from nghttp2 lib
+
   if (wb->wleft() < 9 + length + padlen) {
     return NGHTTP2_ERR_WOULDBLOCK;
   }
@@ -1619,6 +1692,7 @@ int send_data_callback(nghttp2_session *session, nghttp2_frame *frame,
   if (padlen) {
     *p++ = padlen - 1;
   }
+  skb_prop_push(&hd->skbProp, padlen ? 10 : 9, mySkbProp);
 
   while (length) {
     ssize_t nread;
@@ -1636,12 +1710,14 @@ int send_data_callback(nghttp2_session *session, nghttp2_frame *frame,
     stream->body_offset += nread;
     length -= nread;
     p += nread;
+    skb_prop_push(&hd->skbProp, nread, mySkbProp);
   }
 
   if (padlen) {
     std::fill(p, p + padlen - 1, 0);
     p += padlen - 1;
   }
+  skb_prop_push(&hd->skbProp, padlen, mySkbProp);
 
   wb->last = p;
 
