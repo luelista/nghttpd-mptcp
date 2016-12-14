@@ -57,7 +57,7 @@ include(GNUInstallDirs)
 find_package(PythonInterp)
 
 # Auto-detection of features that can be toggled
-find_package(OpenSSL 1.0.1)
+find_package(OpenSSL 1.1.0)
 find_package(Libev 4.11)
 find_package(ZLIB 1.2.3)
 if(OPENSSL_FOUND AND LIBEV_FOUND AND ZLIB_FOUND)
