@@ -278,8 +278,9 @@ public:
   void accept_connection(int fd) {
     util::make_socket_nodelay(fd);
 
-
+#ifdef MPTCP_DEBUG
     printf("MPTCP: Selecting ruleset \"%s\" ...\n", config_->mptcp_ruleset.c_str());
+#endif
     if (config_->mptcp_ruleset.size() > 0) {
       // configure MPTCP rule-based scheduler ruleset
       if (setsockopt(fd, IPPROTO_TCP, MPTCP_RULE_SET, config_->mptcp_ruleset.c_str(), config_->mptcp_ruleset.length()) <
@@ -585,10 +586,12 @@ unsigned int testCounter = 0;
 unsigned int get_skb_property(const Config *config, int caller, nghttp2_frame *frame, Stream *stream) {
   testCounter += 1;
 
+#ifdef MPTCP_DEBUG
   printf("get_skb_property: caller=%d, mode=%d, length=%d, stream_id=%d, type=%d, flags=%d, stream=%p, testCounter=%d\n",
     caller, config->mptcp_skb_property_mode, frame->hd.length, frame->hd.stream_id, frame->hd.type, frame->hd.flags, stream, testCounter);
-  
+
   if (stream) printf("get_skb_property: stream_id=%d, priority_file_type=%d\n", stream->stream_id, stream->priority_file_type);
+#endif
 
   switch(config->mptcp_skb_property_mode) {
     case 1:
@@ -640,7 +643,9 @@ int Http2Handler::fill_wb() {
                                               &session_->aob.item->frame,
                                               stream);
 
+#ifdef MPTCP_DEBUG
     printf("fill_wb: putting %d bytes with prop=%d in annotated write buffer\n", datalen, mySkbProp);
+#endif
     skb_prop_push(&skbProp, datalen, mySkbProp);
     if (n < static_cast<decltype(n)>(datalen)) {
       data_pending_ = data + n;
@@ -817,7 +822,9 @@ fin:
 
 int Http2Handler::write_tls() {
   auto loop = sessions_->get_loop();
+#ifdef MPTCP_DEBUG
 printf("write_tls: start\n");
+#endif
   ERR_clear_error();
 
   for (;;) {
@@ -842,12 +849,16 @@ printf("write_tls: start\n");
           return -1;
         }
       }
+#ifdef MPTCP_DEBUG
       printf("write_tls: draining %d of %d \n", rv, wb_.rleft());
+#endif
       skb_prop_pop(&skbProp, rv);
       wb_.drain(rv);
+#ifdef MPTCP_DEBUG
       printf("skbProp: %p", skbProp);
       if (skbProp) printf(", frameLength=%d, skbProperty=%d", skbProp->frameLength, skbProp->skbProperty);
       printf("\n");
+#endif
       rbs_set_reg(fd_, 1, (skbProp == NULL && nghttp2_session_want_write(session_) == 0) ? 1 : 0);
 
       continue;
