@@ -56,12 +56,16 @@ bool rbs_set_reg(int sock, unsigned int reg_num, unsigned int value) {
   struct rbs_rule_value val;
   val.reg_num = reg_num;
   val.value = value;
+#ifdef MPTCP_DEBUG
   printf("rbs_set_reg: R%d = %d\n", reg_num, value);
+#endif
   return !setsockopt(sock, IPPROTO_TCP, MPTCP_RULE_REG, &val, sizeof(struct rbs_rule_value));
 }
 
 bool rbs_set_skb_property(int sock, unsigned int value) {
+#ifdef MPTCP_DEBUG
   printf("rbs_set_skb_property: %d\n", value);
+#endif
   return !setsockopt(sock, IPPROTO_TCP, MPTCP_RBS_SKB_PROPERTIES, &value, sizeof(unsigned int));
 }
 
