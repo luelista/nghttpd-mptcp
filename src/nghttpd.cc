@@ -230,6 +230,7 @@ int main(int argc, char **argv) {
         {"encoder-header-table-size", required_argument, &flag, 11},
         {"mptcp-ruleset", required_argument, &flag, 12},
         {"mptcp-skb-prop", required_argument, &flag, 13},
+        {"max-ssl-record-size", required_argument, &flag, 14},
         {nullptr, 0, nullptr, 0}};
     int option_index = 0;
     int c = getopt_long(argc, argv, "DVb:c:d:ehm:n:p:va:w:W:", long_options,
@@ -414,6 +415,9 @@ int main(int argc, char **argv) {
         break;
       case 13:
         config.mptcp_skb_property_mode = atoi(optarg);
+        break;
+      case 14:
+        config.max_ssl_record_size = atoi(optarg);
         break;
       }
       break;

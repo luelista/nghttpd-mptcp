@@ -86,6 +86,7 @@ struct Config {
   bool no_content_length;
   std::string mptcp_ruleset;
   int mptcp_skb_property_mode;
+  int max_ssl_record_size;
   Config();
   ~Config();
 };
