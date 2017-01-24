@@ -1304,13 +1304,20 @@ void prepare_response(Stream *stream, Http2Handler *hd,
     }
     const char* pos=(char*)query_pos;
     while(*pos!='\0') {
+      if (*pos != '&' && *pos != '?') break;
+      pos++;
       // set multipath tcp scheduler register
-      if (strncmp("rbs_set_R",query_pos,11)!=0) break;
+      //printf("query string parser: '%s'\n", pos);
+      if (strncmp("rbs_set_R",pos,9)!=0) break;
+      pos+=9;
       int regnum = strtol(pos, (char**)&pos, 10);
+      //printf("query string parser 2: '%s'\n", pos);
       if (*pos != '=') break;
+      pos++;
       int regval = strtol(pos, (char**)&pos, 0);
+      if (regnum < 1 || regnum > 6) break;
+      //printf("setting R%d = %d from query param\n", regnum, regval);
       hd->set_rbs_register(regnum, regval);
-      if (*pos != '&') break;
     }
     raw_path = StringRef{std::begin(reqpath), query_pos};
     raw_query = StringRef{query_pos, std::end(reqpath)};
