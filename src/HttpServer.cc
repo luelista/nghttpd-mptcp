@@ -114,7 +114,7 @@ Config::Config()
       echo_upload(false),
       no_content_length(false),
       mptcp_skb_property_mode(0),
-      max_ssl_record_length(64*1024) {}
+      max_ssl_record_size(64*1024) {}
 
 Config::~Config() {}
 
@@ -834,7 +834,7 @@ printf("write_tls: start\n");
       rbs_set_skb_property(fd_, skb_prop_peek(&skbProp));
 
       auto bytesToWrite = wb_.rleft();
-      if (bytesToWrite > max_ssl_record_size) bytesToWrite = max_ssl_record_size;
+      if (bytesToWrite > get_config()->max_ssl_record_size) bytesToWrite = get_config()->max_ssl_record_size;
       auto rv = SSL_write(ssl_, wb_.pos, bytesToWrite);
 
       if (rv <= 0) {
