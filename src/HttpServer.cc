@@ -1126,6 +1126,13 @@ const Config *Http2Handler::get_config() const {
   return sessions_->get_config();
 }
 
+
+void Http2Handler::set_rbs_register(unsigned int regnum, unsigned int regvalue) {
+  rbs_set_reg(this->fd_, regnum, regvalue);
+}
+
+
+
 void Http2Handler::remove_settings_timer() {
   ev_timer_stop(sessions_->get_loop(), &settings_timerev_);
 }
@@ -1269,8 +1276,6 @@ void prepare_redirect_response(Stream *stream, Http2Handler *hd,
                       headers, nullptr);
 }
 
-
-
 void prepare_response(Stream *stream, Http2Handler *hd,
                       bool allow_push = true) {
   int rv;
@@ -1296,6 +1301,16 @@ void prepare_response(Stream *stream, Http2Handler *hd,
     if (util::streq_l("nghttpd_do_not_respond_to_req=yes",
                       StringRef{query_pos, std::end(reqpath)})) {
       return;
+    }
+    const char* pos=(char*)query_pos;
+    while(*pos!='\0') {
+      // set multipath tcp scheduler register
+      if (strncmp("rbs_set_R",query_pos,11)!=0) break;
+      int regnum = strtol(pos, (char**)&pos, 10);
+      if (*pos != '=') break;
+      int regval = strtol(pos, (char**)&pos, 0);
+      hd->set_rbs_register(regnum, regval);
+      if (*pos != '&') break;
     }
     raw_path = StringRef{std::begin(reqpath), query_pos};
     raw_query = StringRef{query_pos, std::end(reqpath)};

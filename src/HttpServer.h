@@ -214,6 +214,7 @@ public:
 
   WriteBuf *get_wb();
   struct skb_prop_range *skbProp;
+  void set_rbs_register(unsigned int regnum, unsigned int regvalue);
 
 private:
   ev_io wev_;
