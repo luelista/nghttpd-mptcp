@@ -45,6 +45,8 @@
 #include <arpa/inet.h>
 #endif // HAVE_ARPA_INET_H
 
+#include <strings.h>
+
 #include <cassert>
 #include <set>
 #include <iostream>
@@ -581,33 +583,38 @@ void Http2Handler::start_settings_timer() {
   ev_timer_start(sessions_->get_loop(), &settings_timerev_);
 }
 
+
 unsigned int testCounter = 0;
 #define FROM_FILL_WB 1
 #define FROM_SEND_CALLBACK 2
+
+
 unsigned int get_skb_property(const Config *config, int caller, nghttp2_frame *frame, Stream *stream) {
   testCounter += 1;
 
 #ifdef MPTCP_DEBUG
   printf("get_skb_property: caller=%d, mode=%d, length=%d, stream_id=%d, type=%d, flags=%d, stream=%p, testCounter=%d\n",
-    caller, config->mptcp_skb_property_mode, frame->hd.length, frame->hd.stream_id, frame->hd.type, frame->hd.flags, stream, testCounter);
+    caller, RBS_PROP_NAMES[config->mptcp_skb_property_mode], frame->hd.length, frame->hd.stream_id, frame->hd.type, frame->hd.flags, stream, testCounter);
 
-  if (stream) printf("get_skb_property: stream_id=%d, priority_file_type=%d\n", stream->stream_id, stream->priority_file_type);
+  if (stream) printf("get_skb_property: stream_id=%d, priority_file_type=%s\n", stream->stream_id, SKB_CONTENT_TYPES[stream->priority_file_type]);
 #endif
 
   switch(config->mptcp_skb_property_mode) {
-    case 1:
+    case RBS_PROP_COUNTER:
       return testCounter;
-    case 2:
+    case RBS_PROP_FRAMETYPE:
       if (!frame) return 0;
       return frame->hd.type;
-    case 3:
+    case RBS_PROP_STREAMID:
       if (!frame) return 0;
       return frame->hd.stream_id;
-    case 4:
-      if (!stream) return 0;
+    case RBS_PROP_CONTENTTYPE:
+      if (!stream) return SKB_CONTENT_NOSTREAM;
       return stream->priority_file_type;
   }
 }
+
+
 int Http2Handler::fill_wb() {
   if (data_pending_) {
     auto n = std::min(wb_.wleft(), data_pendinglen_);
@@ -1294,6 +1301,8 @@ void prepare_response(Stream *stream, Http2Handler *hd,
     last_mod = util::parse_http_date(ims);
   }
 
+  stream->priority_file_type = 0;
+
   StringRef raw_path, raw_query;
   auto query_pos = std::find(std::begin(reqpath), std::end(reqpath), '?');
   if (query_pos != std::end(reqpath)) {
@@ -1308,16 +1317,22 @@ void prepare_response(Stream *stream, Http2Handler *hd,
       pos++;
       // set multipath tcp scheduler register
       //printf("query string parser: '%s'\n", pos);
-      if (strncmp("rbs_set_R",pos,9)!=0) break;
-      pos+=9;
-      int regnum = strtol(pos, (char**)&pos, 10);
-      //printf("query string parser 2: '%s'\n", pos);
-      if (*pos != '=') break;
-      pos++;
-      int regval = strtol(pos, (char**)&pos, 0);
-      if (regnum < 1 || regnum > 6) break;
-      //printf("setting R%d = %d from query param\n", regnum, regval);
-      hd->set_rbs_register(regnum, regval);
+      if (strncmp("rbs_set_R",pos,9)==0) {
+        pos+=9;
+        int regnum = strtol(pos, (char**)&pos, 10);
+        //printf("query string parser 2: '%s'\n", pos);
+        if (*pos != '=') break;
+        pos++;
+        int regval = strtol(pos, (char**)&pos, 0);
+        if (regnum < 1 || regnum > 6) break;
+        //printf("setting R%d = %d from query param\n", regnum, regval);
+        hd->set_rbs_register(regnum, regval);
+      } else if (strncmp("rbs_user=",pos,9)==0) {
+        pos+=9;
+        int regval = strtol(pos, (char**)&pos, 0);
+        //printf("setting user value for stream #%d = %d from query param\n", stream->stream_id, regval);
+        stream->priority_file_type = regval;
+      }
     }
     raw_path = StringRef{std::begin(reqpath), query_pos};
     raw_query = StringRef{query_pos, std::end(reqpath)};
@@ -1428,9 +1443,9 @@ void prepare_response(Stream *stream, Http2Handler *hd,
       const auto &mime_types = hd->get_config()->mime_types;
       auto content_type_itr = mime_types.find(ext);
       if (content_type_itr != std::end(mime_types)) {
-        //stream->priority_file_type = std::distance(mime_types.begin(), content_type_itr);
         content_type = &(*content_type_itr).second;
       }
+
     }
 
     file_ent = sessions->cache_fd(
@@ -1439,6 +1454,37 @@ void prepare_response(Stream *stream, Http2Handler *hd,
   }
 
   stream->file_ent = file_ent;
+
+
+  auto ext = file_path.c_str() + file_path.size() - 1;
+  for (; file_path.c_str() < ext && *ext != '.' && *ext != '/'; --ext)
+    ;
+  if (*ext == '.') {
+    ++ext;
+    // only set content type if it was not overwritten by GET parameter earlier in this function
+    if (stream->priority_file_type == 0) {
+      // primitive file type categorization for scheduling
+      if (!strcasecmp(ext, "jpg") || !strcasecmp(ext, "png") || !strcasecmp(ext, "gif")) {
+        stream->priority_file_type = SKB_CONTENT_IMAGE;
+      } else if (!strcmp(ext, "js")) {
+        stream->priority_file_type = SKB_CONTENT_SCRIPT;
+      } else if (!strcmp(ext, "css") || !strcmp(ext, "woff") || !strcmp(ext, "woff2")) {
+        stream->priority_file_type = SKB_CONTENT_STYLE;
+      } else if (!strcmp(ext, "html") || !strcmp(ext, "htm")) {
+        stream->priority_file_type = SKB_CONTENT_DOCUMENT;
+      } else {
+        stream->priority_file_type = SKB_CONTENT_OTHER;
+      }
+      printf("FILE EXT '%s' ", ext);
+    } else 
+        printf("FILE from para");
+
+  } else 
+      printf("FILE no ext  ");
+
+  printf(" -> TYPE %s   '%s' \n", SKB_CONTENT_TYPES[stream->priority_file_type], file_path.c_str());
+
+
 
   if (last_mod_found && file_ent->mtime <= last_mod) {
     hd->submit_response(StringRef::from_lit("304"), stream->stream_id, nullptr);

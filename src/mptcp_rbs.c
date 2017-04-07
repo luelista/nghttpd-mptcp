@@ -11,6 +11,11 @@
 
 #include "mptcp_rbs.h"
 
+
+const char* SKB_CONTENT_TYPES[] = {"<unknown>", "CONTENT_NOSTREAM","CONTENT_DOCUMENT","CONTENT_SCRIPT","CONTENT_STYLE","CONTENT_IMAGE","CONTENT_OTHER"};
+const char* RBS_PROP_NAMES[] = {"counter","frametype","streamid","contenttype","client"};
+
+
 bool rbs_load_rule_set(const char *name, const char *rules)
 {
   int file;
@@ -54,7 +59,7 @@ bool rbs_remove_rule_set(const char *name) {
 
 bool rbs_set_reg(int sock, unsigned int reg_num, unsigned int value) {
   struct rbs_rule_value val;
-  val.reg_num = reg_num - 1; //seems to be off by one w.r.t. the R1-R6 statements in rule language...
+  val.reg_num = reg_num - 1; // off by one w.r.t. the R1-R6 statements in rule language
   val.value = value;
 #ifdef MPTCP_DEBUG
   printf("rbs_set_reg: R%d = %d\n", reg_num, value);
